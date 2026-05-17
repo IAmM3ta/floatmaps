@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloatMaps • Offline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #050505; color: white; }
+        .glass { background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); border: 1px solid rgba(103,246,255,0.1); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-md text-center">
+        <div class="mx-auto w-16 h-16 mb-6 flex items-center justify-center">
+            <!-- Simple offline icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 text-[#67f6ff]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 9.838a9 9 0 01-9.838-7.824" />
+            </svg>
+        </div>
+        <h1 class="font-display text-4xl tracking-tighter mb-3">You're offline</h1>
+        <p class="text-white/70 mb-6">FloatMaps core experience is cached. Some map tiles and external resources may require connection.</p>
+        
+        <div class="glass p-5 rounded-2xl text-left text-sm mb-6">
+            <div class="font-semibold mb-2 text-[#67f6ff]">Cached & Available</div>
+            <ul class="space-y-1 text-white/80 text-xs">
+                <li>• 3D Globe & orbital view</li>
+                <li>• Profile & FunWheel X7 dashboard</li>
+                <li>• Ride logging (will sync when online)</li>
+                <li>• Basic UI & filters</li>
+            </ul>
+        </div>
+
+        <button onclick="window.location.reload()" 
+                class="w-full py-3 rounded-2xl bg-[#67f6ff] text-[#050505] font-semibold tracking-wider">
+            TRY AGAIN
+        </button>
+        <p class="mt-4 text-xs text-white/40">OPEV • FloatMaps • 2026</p>
+    </div>
+</body>
+</html>
