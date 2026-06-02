@@ -1,0 +1,40 @@
+{
+  "name": "@floatmaps/floatila",
+  "version": "0.1.0",
+  "description": "FloatILA (Inter-device Location Architecture) - Client library and utilities for the FloatMaps mesh protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IAmM3ta/floatmaps.git"
+  },
+  "keywords": [
+    "floatmaps",
+    "floatila",
+    "mesh",
+    "location",
+    "ble",
+    "cryptography",
+    "schnorr"
+  ],
+  "author": "Metta Thomas",
+  "license": "MIT",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "dependencies": {
+    "@noble/curves": "^1.8.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "@types/node": "^22.15.29"
+  },
+  "files": [
+    "dist"
+  ]
+}
