@@ -1,1 +1,1 @@
-UPDATED_WITH_DETAILED_CESIUM_3D_TILES_LOD_OPTIMIZATION_SECTION (maximumScreenSpaceError, dynamicScreenSpaceErrorFactor/Density, skipLevelOfDetail, etc. for Gaussian splat tilesets) AND_WEBXR_HAPTIC_API_EXPLORATION (pulse via hapticActuators, integration in ARManager, bidirectional ping haptics)
+UPDATED_README_WITH_NEW_SECTIONS: Ride Recording & Sharing, Permissions-based Geocache-style AR Overlays, GroupRide Informational Beacon (tap-to-load route/safety/rules/gamified stats), Bidirectional Social Ping, and revenue addon extensibility notes
