@@ -1,0 +1,34 @@
+name: Publish @floatmaps/floatila to GitHub Packages
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install dependencies
+        working-directory: packages/floatila
+        run: npm ci
+
+      - name: Build
+        working-directory: packages/floatila
+        run: npm run build
+
+      - name: Publish to GitHub Packages
+        working-directory: packages/floatila
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
