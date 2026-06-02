@@ -6,8 +6,42 @@ FloatMaps includes a reusable client library for the **FloatILA** (Inter-device 
 
 ### Installation
 
+#### From GitHub Packages (Recommended)
+
+Because `@floatmaps/floatila` is published to GitHub Packages, you need to configure your package manager to use the GitHub registry.
+
+Create or update a `.npmrc` file in your project root:
+
+```ini
+@floatmaps:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
+
+Then install the package:
+
 ```bash
 npm install @floatmaps/floatila
+```
+
+#### Using pnpm or Yarn
+
+**pnpm:**
+```bash
+pnpm add @floatmaps/floatila
+```
+
+**yarn:**
+```bash
+yarn add @floatmaps/floatila
+```
+
+#### Development (from source)
+
+```bash
+git clone https://github.com/IAmM3ta/floatmaps.git
+cd floatmaps/packages/floatila
+npm install
+npm run build
 ```
 
 ### Usage
@@ -31,10 +65,8 @@ The package is configured to publish to GitHub Packages.
 To publish a new version:
 
 1. Update the version in `packages/floatila/package.json`
-2. Create a new GitHub Release
-3. The `publish-floatila.yml` workflow will automatically build and publish the package.
-
-You can also trigger the workflow manually from the Actions tab.
+2. Create a new GitHub Release (or trigger the workflow manually)
+3. The `.github/workflows/publish-floatila.yml` workflow will automatically build and publish the package.
 
 ### Development
 
