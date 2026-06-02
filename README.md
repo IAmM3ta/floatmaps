@@ -1,1 +1,1 @@
-UPDATED_README_WITH_NEW_SECTIONS_ON_BEACON_SHADER_AND_GAUSSIAN_SPLATTING_MANHATTAN_INTEGRATION (include the shader code snippet and production notes for Cesium/gaussian-splats-3d tilesets)
+FULLY_UPDATED_README_WITH_NEW_SECTIONS: Production Gaussian Splat Loading (Cesium 3D Tiles + gaussian-splats-3d), Performance Optimizations (LOD, culling, instancing), GroupRide DeviceID Proximity Ping, Bidirectional Social Ping (tap beacon → haptic on friend device via Realtime), and all previous design/AR guidance
