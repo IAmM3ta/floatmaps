@@ -6,6 +6,15 @@
   },
   "imports": {
     "@floatmaps/core/": "./packages/core/src/",
-    "@shared/": "./supabase/functions/_shared/"
+    "@shared/": "./supabase/functions/_shared/",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4"
+  },
+  "scopes": {
+    "./supabase/functions/": {
+      "@shared/": "./supabase/functions/_shared/"
+    },
+    "./packages/": {
+      "@shared/": "./packages/core/src/"
+    }
   }
 }
