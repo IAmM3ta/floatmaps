@@ -18,7 +18,18 @@ interface WalkieTalkieOptions {
 }
 
 /**
- * Secure Walkie-talkie with robust error handling for TURN fetching
+ * Peer-to-peer Walkie-talkie for FloatMaps GroupRides
+ *
+ * Features:
+ * - Multiple public STUN servers for reliability
+ * - Optional secure TURN credential fetching
+ * - ICE restart + connection state monitoring
+ * - Push-to-talk optimized for riding
+ *
+ * Production Note:
+ * Public STUN servers work well for most cases, but for production use with many riders
+ * (especially on mobile networks), strongly consider adding TURN servers.
+ * Recommended providers: Metered.ca, Twilio, or self-hosted coturn.
  */
 export class WalkieTalkie {
   private supabase: SupabaseClient;
@@ -29,14 +40,22 @@ export class WalkieTalkie {
   private channel: any;
   private restartTimers: Map<string, number> = new Map();
 
+  // Curated list of reliable public STUN servers (as of 2026)
   private iceServers: RTCIceServer[] = [
+    // Google (primary, very reliable)
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+
+    // Cloudflare (excellent global coverage + low latency)
     { urls: 'stun:stun.cloudflare.com:3478' },
+
+    // Twilio (reliable backup)
     { urls: 'stun:global.stun.twilio.com:3478' },
+
+    // Additional public fallback
     { urls: 'stun:stun.stunprotocol.org:3478' },
   ];
 
@@ -80,30 +99,19 @@ export class WalkieTalkie {
     }
   }
 
-  /**
-   * Securely fetch TURN credentials with detailed error handling
-   */
-  private async fetchTurnCredentials(): Promise<void> {
+  private async fetchTurnCredentials() {
     try {
       const { data, error } = await this.supabase.functions.invoke('turn-credentials');
 
-      if (error) {
-        console.warn('[WalkieTalkie] TURN credential fetch failed (Edge Function error):', error.message);
-        return; // Graceful degradation to STUN only
-      }
-
-      if (!data?.turn) {
-        console.warn('[WalkieTalkie] No TURN credentials returned from backend');
+      if (error || !data?.turn) {
+        console.warn('[WalkieTalkie] Could not fetch TURN credentials, falling back to STUN only');
         return;
       }
 
-      // Successfully received TURN config
       this.iceServers.push(data.turn);
-      console.log('[WalkieTalkie] TURN credentials loaded securely from backend');
+      console.log('[WalkieTalkie] TURN credentials loaded securely');
     } catch (err: any) {
-      // Network error, auth error, or unexpected failure
-      console.warn('[WalkieTalkie] TURN credential fetch error (network/unexpected):', err?.message || err);
-      // Do not throw — allow app to continue with STUN only
+      console.warn('[WalkieTalkie] TURN fetch error:', err?.message || err);
     }
   }
 
