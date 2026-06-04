@@ -1,6 +1,11 @@
 import { assert } from "https://deno.land/std@0.177.0/assert/mod.ts";
+// ^ Deno Standard Library - provides testing assertions
+
 import { fc, testProp } from "https://esm.sh/fast-check@3.18.0";
+// ^ fast-check via esm.sh - property-based testing library for generating test cases and shrinking
+
 import { isValidRideSession, isValidTelemetryPoint } from "../types/ride.ts";
+// ^ Local project import - validation functions defined in the core types
 
 // === Improved Property Tests with Better Shrinking ===
 
