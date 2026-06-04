@@ -16,7 +16,6 @@ testProp(
     metadata: fc.object(),
   }, { requiredKeys: ["id", "riderId", "startedAt", "isPublic"] })],
   (session) => {
-    // Skip cases where endedAt is before startedAt
     if (session.endedAt && new Date(session.endedAt) < new Date(session.startedAt)) {
       return;
     }
@@ -41,9 +40,13 @@ testProp(
   }
 );
 
-// === Shrinking Demonstration Test ===
-// This test is designed to fail so we can observe shrinking in action.
-// It looks for the smallest latitude that causes isValidTelemetryPoint to return false.
+// === Shrinking Demonstration ===
+// This test is intentionally written to demonstrate how fast-check performs shrinking.
+// When a property fails, fast-check tries to find the *smallest* possible input
+// that still causes the failure. This process is called "shrinking".
+//
+// In the output below, `result.counterexample` contains the minimal failing input.
+// This makes debugging much easier because you see the simplest case that breaks your code.
 Deno.test("Shrinking demonstration: find minimal invalid latitude", async () => {
   const result = await fc.check(
     fc.property(
@@ -54,7 +57,6 @@ Deno.test("Shrinking demonstration: find minimal invalid latitude", async () => 
           latitude: badLatitude,
           longitude: 0,
         };
-        // We expect this to be invalid
         return isValidTelemetryPoint(point) === false;
       }
     ),
@@ -64,6 +66,7 @@ Deno.test("Shrinking demonstration: find minimal invalid latitude", async () => 
   if (result.failed) {
     console.log("\n=== Shrinking Counterexample ===");
     console.log("Smallest failing latitude found:", result.counterexample?.[0]);
-    console.log("(This demonstrates how fast-check shrinks to the minimal failing input)");
+    console.log("\nThis value is the result of fast-check's shrinking algorithm.");
+    console.log("It started with larger invalid values and reduced them to the smallest possible failing input.");
   }
 });
