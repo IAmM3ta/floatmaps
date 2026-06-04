@@ -10,14 +10,15 @@ interface WalkieTalkieOptions {
   supabase: SupabaseClient;
   groupRideId: string;
   riderId: string;
-  turnServers?: TurnServer[];           // Optional custom TURN servers
+  turnServers?: TurnServer[];
+  autoFetchTurnCredentials?: boolean;   // If true, fetches from /turn-credentials
   onRemoteAudio?: (stream: MediaStream, fromRiderId: string) => void;
   onError?: (error: Error) => void;
   onConnectionStateChange?: (peerId: string, state: RTCPeerConnectionState) => void;
 }
 
 /**
- * Peer-to-peer Walkie-talkie with configurable TURN + robust ICE
+ * Secure Walkie-talkie with optional automatic TURN credential fetching
  */
 export class WalkieTalkie {
   private supabase: SupabaseClient;
@@ -28,26 +29,22 @@ export class WalkieTalkie {
   private channel: any;
   private restartTimers: Map<string, number> = new Map();
 
-  private iceServers: RTCIceServer[];
+  private iceServers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.stunprotocol.org:3478' },
+  ];
 
   constructor(private options: WalkieTalkieOptions) {
     this.supabase = options.supabase;
     this.groupRideId = options.groupRideId;
     this.riderId = options.riderId;
 
-    // Build ICE servers list: STUN + optional TURN
-    this.iceServers = [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
-      { urls: 'stun:stun.stunprotocol.org:3478' },
-    ];
-
-    // Add user-provided TURN servers (highest priority for reliability)
     if (options.turnServers && options.turnServers.length > 0) {
       this.iceServers.push(...options.turnServers);
     }
@@ -55,6 +52,11 @@ export class WalkieTalkie {
 
   async start() {
     try {
+      // Optionally fetch secure TURN credentials from backend
+      if (this.options.autoFetchTurnCredentials) {
+        await this.fetchTurnCredentials();
+      }
+
       this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       this.channel = this.supabase.channel(`walkie-${this.groupRideId}`)
@@ -74,10 +76,28 @@ export class WalkieTalkie {
           }
         }
       }
-
-      console.log('[WalkieTalkie] Started');
     } catch (err) {
       this.options.onError?.(err as Error);
+    }
+  }
+
+  /**
+   * Securely fetch TURN credentials from Edge Function
+   */
+  private async fetchTurnCredentials() {
+    try {
+      const { data, error } = await this.supabase.functions.invoke('turn-credentials');
+
+      if (error || !data?.turn) {
+        console.warn('Failed to fetch TURN credentials, using STUN only');
+        return;
+      }
+
+      // Add fetched TURN server(s)
+      this.iceServers.push(data.turn);
+      console.log('[WalkieTalkie] TURN credentials loaded securely');
+    } catch (err) {
+      console.warn('TURN credential fetch error:', err);
     }
   }
 
@@ -114,7 +134,6 @@ export class WalkieTalkie {
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
         this.scheduleIceRestart(targetRiderId);
       }
-
       if (pc.iceConnectionState === 'connected') {
         this.clearRestartTimer(targetRiderId);
       }
