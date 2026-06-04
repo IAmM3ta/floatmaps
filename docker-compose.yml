@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Supabase Local Development Stack
+  # Run with: docker compose up
+  # Then run: npx supabase start (or use the Supabase CLI)
+  
+  supabase-db:
+    image: supabase/postgres:15.1.0.147
+    container_name: floatmaps-supabase-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  supabase-studio:
+    image: supabase/studio:latest
+    container_name: floatmaps-supabase-studio
+    ports:
+      - "5433:3000"
+    environment:
+      SUPABASE_URL: http://localhost:54321
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+
+volumes:
+  supabase-db-data:
