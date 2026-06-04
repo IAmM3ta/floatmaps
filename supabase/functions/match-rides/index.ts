@@ -11,38 +11,42 @@ serve(async (req) => {
 
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Unauthorized", code: "AUTH_REQUIRED" }), { status: 401 });
   }
 
   let body: any;
   try {
     body = await req.json();
   } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "Invalid JSON body", code: "INVALID_JSON" }), { status: 400 });
   }
 
-  const { latitude, longitude, maxDistanceKm, timeWindowHours } = body;
+  const { latitude, longitude, maxDistanceKm, timeWindowHours, geofence } = body;
 
-  if (!latitude || !longitude) {
-    return new Response(JSON.stringify({ error: "latitude and longitude are required" }), { status: 400 });
+  if (typeof latitude !== "number" || typeof longitude !== "number") {
+    return new Response(JSON.stringify({ error: "latitude and longitude are required", code: "MISSING_LOCATION" }), { status: 400 });
   }
 
-  // Fetch active group rides
   const { data: rides, error } = await supabase
     .from("group_rides")
     .select("*")
     .eq("status", "active");
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: error.message, code: "DB_ERROR" }), { status: 500 });
   }
 
-  const matched = findMatchingRides(rides || [], { latitude, longitude }, {
-    maxDistanceKm: maxDistanceKm ?? 50,
-    timeWindowHours: timeWindowHours ?? 4,
-  });
+  try {
+    const matched = findMatchingRides(rides || [], { latitude, longitude }, {
+      maxDistanceKm: maxDistanceKm ?? 50,
+      timeWindowHours: timeWindowHours ?? 4,
+      geofence,
+    });
 
-  return new Response(JSON.stringify({ matches: matched }), {
-    headers: { "Content-Type": "application/json" },
-  });
+    return new Response(JSON.stringify({ matches: matched, count: matched.length }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message || "Matching failed", code: "MATCHING_ERROR" }), { status: 500 });
+  }
 });

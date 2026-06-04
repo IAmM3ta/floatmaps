@@ -6,55 +6,59 @@ interface RiderLocation {
 }
 
 interface MatchOptions {
-  maxDistanceKm?: number;      // default 50km
-  timeWindowHours?: number;    // default 4 hours
+  maxDistanceKm?: number;
+  timeWindowHours?: number;
   now?: Date;
+  geofence?: {
+    centerLat: number;
+    centerLon: number;
+    radiusKm: number;
+  };
 }
 
 interface MatchedRide extends GroupRide {
   distanceKm: number;
   startsInMinutes: number;
-  score: number;               // lower is better
+  score: number;
 }
 
 /**
- * Haversine formula to calculate distance between two points on Earth
+ * Haversine distance in kilometers
  */
-function haversineDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number
-): number {
-  const R = 6371; // Earth radius in km
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /**
- * Score a ride based on distance and time proximity.
- * Lower score = better match.
+ * Improved proximity scoring
+ * Lower score = better match
  */
-function calculateScore(distanceKm: number, startsInMinutes: number): number {
-  // Weight distance more heavily than time
-  const distanceWeight = 2.0;
-  const timeWeight = 1.0;
-
-  return distanceKm * distanceWeight + startsInMinutes * timeWeight;
+function calculateProximityScore(distanceKm: number, startsInMinutes: number): number {
+  const distanceScore = distanceKm * 1.8;
+  const timeScore = Math.pow(startsInMinutes / 60, 1.2) * 0.8; // slight non-linear time penalty
+  return distanceScore + timeScore;
 }
 
 /**
- * Find and rank GroupRides near a rider's location.
+ * Check if a point is inside a geofence
+ */
+function isInsideGeofence(
+  pointLat: number,
+  pointLon: number,
+  geofence: { centerLat: number; centerLon: number; radiusKm: number }
+): boolean {
+  const distance = haversineDistance(pointLat, pointLon, geofence.centerLat, geofence.centerLon);
+  return distance <= geofence.radiusKm;
+}
+
+/**
+ * Main ride matching function with proximity scoring + geofencing
  */
 export function findMatchingRides(
   rides: GroupRide[],
@@ -65,30 +69,29 @@ export function findMatchingRides(
     maxDistanceKm = 50,
     timeWindowHours = 4,
     now = new Date(),
+    geofence,
   } = options;
 
   const timeWindowMs = timeWindowHours * 60 * 60 * 1000;
-
-  const matched: MatchedRide[] = [];
+  const results: MatchedRide[] = [];
 
   for (const ride of rides) {
     if (ride.status !== 'active') continue;
 
-    // For now we assume ride has no explicit location.
-    // In future we can add start_location or use first telemetry point.
-    // Placeholder: skip rides without location data for now.
-    // TODO: Replace with actual ride start location when available.
     const rideLat = (ride.metadata as any)?.startLatitude;
     const rideLon = (ride.metadata as any)?.startLongitude;
 
-    if (!rideLat || !rideLon) continue;
+    if (!rideLat || !rideLon) {
+      // Skip rides without location data (graceful handling)
+      continue;
+    }
 
-    const distanceKm = haversineDistance(
-      riderLocation.latitude,
-      riderLocation.longitude,
-      rideLat,
-      rideLon
-    );
+    // Apply geofence if provided
+    if (geofence && !isInsideGeofence(rideLat, rideLon, geofence)) {
+      continue;
+    }
+
+    const distanceKm = haversineDistance(riderLocation.latitude, riderLocation.longitude, rideLat, rideLon);
 
     if (distanceKm > maxDistanceKm) continue;
 
@@ -98,18 +101,18 @@ export function findMatchingRides(
     if (startsInMs < 0 || startsInMs > timeWindowMs) continue;
 
     const startsInMinutes = Math.floor(startsInMs / (1000 * 60));
-    const score = calculateScore(distanceKm, startsInMinutes);
+    const score = calculateProximityScore(distanceKm, startsInMinutes);
 
-    matched.push({
+    results.push({
       ...ride,
       distanceKm: Math.round(distanceKm * 10) / 10,
       startsInMinutes,
-      score,
+      score: Math.round(score * 100) / 100,
     });
   }
 
-  // Sort by score (best matches first)
-  matched.sort((a, b) => a.score - b.score);
+  // Sort by score (best first)
+  results.sort((a, b) => a.score - b.score);
 
-  return matched;
+  return results;
 }
