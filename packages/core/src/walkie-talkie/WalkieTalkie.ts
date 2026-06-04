@@ -11,14 +11,14 @@ interface WalkieTalkieOptions {
   groupRideId: string;
   riderId: string;
   turnServers?: TurnServer[];
-  autoFetchTurnCredentials?: boolean;   // If true, fetches from /turn-credentials
+  autoFetchTurnCredentials?: boolean;
   onRemoteAudio?: (stream: MediaStream, fromRiderId: string) => void;
   onError?: (error: Error) => void;
   onConnectionStateChange?: (peerId: string, state: RTCPeerConnectionState) => void;
 }
 
 /**
- * Secure Walkie-talkie with optional automatic TURN credential fetching
+ * Secure Walkie-talkie with robust error handling for TURN fetching
  */
 export class WalkieTalkie {
   private supabase: SupabaseClient;
@@ -52,7 +52,6 @@ export class WalkieTalkie {
 
   async start() {
     try {
-      // Optionally fetch secure TURN credentials from backend
       if (this.options.autoFetchTurnCredentials) {
         await this.fetchTurnCredentials();
       }
@@ -82,22 +81,29 @@ export class WalkieTalkie {
   }
 
   /**
-   * Securely fetch TURN credentials from Edge Function
+   * Securely fetch TURN credentials with detailed error handling
    */
-  private async fetchTurnCredentials() {
+  private async fetchTurnCredentials(): Promise<void> {
     try {
       const { data, error } = await this.supabase.functions.invoke('turn-credentials');
 
-      if (error || !data?.turn) {
-        console.warn('Failed to fetch TURN credentials, using STUN only');
+      if (error) {
+        console.warn('[WalkieTalkie] TURN credential fetch failed (Edge Function error):', error.message);
+        return; // Graceful degradation to STUN only
+      }
+
+      if (!data?.turn) {
+        console.warn('[WalkieTalkie] No TURN credentials returned from backend');
         return;
       }
 
-      // Add fetched TURN server(s)
+      // Successfully received TURN config
       this.iceServers.push(data.turn);
-      console.log('[WalkieTalkie] TURN credentials loaded securely');
-    } catch (err) {
-      console.warn('TURN credential fetch error:', err);
+      console.log('[WalkieTalkie] TURN credentials loaded securely from backend');
+    } catch (err: any) {
+      // Network error, auth error, or unexpected failure
+      console.warn('[WalkieTalkie] TURN credential fetch error (network/unexpected):', err?.message || err);
+      // Do not throw — allow app to continue with STUN only
     }
   }
 
