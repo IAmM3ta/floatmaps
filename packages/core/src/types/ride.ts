@@ -26,17 +26,22 @@ export interface RideTelemetryPoint {
 }
 
 /**
- * Basic validation for RideSession
+ * Validation for RideSession
  */
 export function isValidRideSession(session: Partial<RideSession>): boolean {
-  if (!session.id || !session.riderId || !session.startedAt) {
-    return false;
-  }
-  if (typeof session.isPublic !== "boolean") {
-    return false;
-  }
-  if (session.endedAt && new Date(session.endedAt) < new Date(session.startedAt)) {
-    return false;
-  }
+  if (!session.id || !session.riderId || !session.startedAt) return false;
+  if (typeof session.isPublic !== "boolean") return false;
+  if (session.endedAt && new Date(session.endedAt) < new Date(session.startedAt)) return false;
+  return true;
+}
+
+/**
+ * Validation for RideTelemetryPoint
+ */
+export function isValidTelemetryPoint(point: Partial<RideTelemetryPoint>): boolean {
+  if (!point.recordedAt) return false;
+  if (typeof point.latitude !== "number" || typeof point.longitude !== "number") return false;
+  if (point.latitude < -90 || point.latitude > 90) return false;
+  if (point.longitude < -180 || point.longitude > 180) return false;
   return true;
 }

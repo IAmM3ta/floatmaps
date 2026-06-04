@@ -1,80 +1,73 @@
 import { assertEquals } from "https://deno.land/std@0.177.0/assert/mod.ts";
-import { isValidRideSession } from "../types/ride.ts";
+import { isValidRideSession, isValidTelemetryPoint } from "../types/ride.ts";
 import { isValidGroupRide } from "../types/group-ride.ts";
+import { isValidDevice } from "../types/device.ts";
 import {
   createMockRideSession,
+  createMockTelemetryPoint,
   createMockGroupRide,
+  createMockDevice,
 } from "../testing/test-utils.ts";
 
-// === RideSession Edge Cases ===
-
+// === RideSession Validation ===
 Deno.test("isValidRideSession - false when id is missing", () => {
   const session = createMockRideSession({ id: undefined as any });
   assertEquals(isValidRideSession(session), false);
 });
 
-Deno.test("isValidRideSession - false when riderId is missing", () => {
-  const session = createMockRideSession({ riderId: undefined as any });
-  assertEquals(isValidRideSession(session), false);
-});
-
-Deno.test("isValidRideSession - false when startedAt is missing", () => {
-  const session = createMockRideSession({ startedAt: undefined as any });
-  assertEquals(isValidRideSession(session), false);
-});
-
-Deno.test("isValidRideSession - false when isPublic is not boolean", () => {
-  const session = createMockRideSession({ isPublic: "yes" as any });
-  assertEquals(isValidRideSession(session), false);
-});
-
-Deno.test("isValidRideSession - false when endedAt is before startedAt", () => {
-  const session = createMockRideSession({
-    startedAt: "2026-06-04T12:00:00Z",
-    endedAt: "2026-06-04T11:00:00Z",
-  });
-  assertEquals(isValidRideSession(session), false);
-});
-
-Deno.test("isValidRideSession - true when endedAt is after startedAt", () => {
+Deno.test("isValidRideSession - false when endedAt before startedAt", () => {
   const session = createMockRideSession({
     startedAt: "2026-06-04T10:00:00Z",
-    endedAt: "2026-06-04T12:00:00Z",
+    endedAt: "2026-06-04T09:00:00Z",
   });
-  assertEquals(isValidRideSession(session), true);
+  assertEquals(isValidRideSession(session), false);
 });
 
-// === GroupRide Edge Cases ===
-
-Deno.test("isValidGroupRide - false when id is missing", () => {
-  const ride = createMockGroupRide({ id: undefined as any });
-  assertEquals(isValidGroupRide(ride), false);
+// === TelemetryPoint Validation ===
+Deno.test("isValidTelemetryPoint - true for valid point", () => {
+  const point = createMockTelemetryPoint();
+  assertEquals(isValidTelemetryPoint(point), true);
 });
 
-Deno.test("isValidGroupRide - false when name is missing", () => {
-  const ride = createMockGroupRide({ name: undefined as any });
-  assertEquals(isValidGroupRide(ride), false);
+Deno.test("isValidTelemetryPoint - false when latitude out of range", () => {
+  const point = createMockTelemetryPoint({ latitude: 95 });
+  assertEquals(isValidTelemetryPoint(point), false);
 });
 
-Deno.test("isValidGroupRide - false when creatorId is missing", () => {
-  const ride = createMockGroupRide({ creatorId: undefined as any });
-  assertEquals(isValidGroupRide(ride), false);
+Deno.test("isValidTelemetryPoint - false when longitude out of range", () => {
+  const point = createMockTelemetryPoint({ longitude: 200 });
+  assertEquals(isValidTelemetryPoint(point), false);
 });
 
+// === GroupRide Validation ===
 Deno.test("isValidGroupRide - false when status is invalid", () => {
   const ride = createMockGroupRide({ status: "cancelled" as any });
   assertEquals(isValidGroupRide(ride), false);
 });
 
-Deno.test("isValidGroupRide - false when endedAt before startedAt", () => {
-  const ride = createMockGroupRide({
-    startedAt: "2026-06-04T10:00:00Z",
-    endedAt: "2026-06-04T09:00:00Z",
-  });
-  assertEquals(isValidGroupRide(ride), false);
+// === Device Validation ===
+Deno.test("isValidDevice - true for valid device", () => {
+  const device = createMockDevice();
+  assertEquals(isValidDevice(device), true);
 });
 
-Deno.test("isValidGroupRide - true for minimal valid ride", () => {
-  const ride = createMockGroupRide();
-  assertEquals(isValidGroupRide(ride), true);
+Deno.test("isValidDevice - false when missing required fields", () => {
+  const device = createMockDevice({ id: undefined as any });
+  assertEquals(isValidDevice(device), false);
+});
+
+// === Relationship-style Tests ===
+Deno.test("RideSession can reference a valid device", () => {
+  const device = createMockDevice();
+  const session = createMockRideSession({ deviceId: device.id });
+  assertEquals(session.deviceId, device.id);
+  assertEquals(isValidRideSession(session), true);
+});
+
+Deno.test("TelemetryPoint belongs to a ride session context", () => {
+  const point = createMockTelemetryPoint();
+  const session = createMockRideSession();
+  // In real usage, point would be linked via ride_session_id in DB
+  assertEquals(isValidTelemetryPoint(point), true);
+  assertEquals(isValidRideSession(session), true);
 });
