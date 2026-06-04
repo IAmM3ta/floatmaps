@@ -51,7 +51,6 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "groupRideId is required", code: "INVALID_INPUT" }), { status: 400 });
       }
 
-      // Check if group exists and is active
       const { data: group, error: groupError } = await supabase
         .from("group_rides")
         .select("id, status")
@@ -70,7 +69,7 @@ serve(async (req) => {
         .insert({ group_ride_id: groupRideId, rider_id: user.id });
 
       if (joinError) {
-        if (joinError.code === "23505") { // unique violation
+        if (joinError.code === "23505") {
           return new Response(JSON.stringify({ error: "Already joined this group ride", code: "ALREADY_JOINED" }), { status: 409 });
         }
         throw joinError;
@@ -119,7 +118,27 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true }));
     }
 
-    // Get active GroupRides (with participant count)
+    // Get participants with current locations (for initial load + polling fallback)
+    if (action === "get_participants") {
+      const { groupRideId } = data || {};
+      if (!groupRideId) {
+        return new Response(JSON.stringify({ error: "groupRideId is required", code: "INVALID_INPUT" }), { status: 400 });
+      }
+
+      const { data: participants, error } = await supabase
+        .from("group_ride_participants")
+        .select(`
+          rider_id,
+          joined_at,
+          last_location
+        `)
+        .eq("group_ride_id", groupRideId);
+
+      if (error) throw error;
+      return new Response(JSON.stringify({ participants }));
+    }
+
+    // List active GroupRides
     if (action === "list_active") {
       const { data: groups, error } = await supabase
         .from("group_rides")
