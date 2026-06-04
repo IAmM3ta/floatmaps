@@ -1,32 +1,43 @@
-import { assertEquals, assertExists } from "https://deno.land/std@0.177.0/assert/mod.ts";
+import { assertEquals } from "https://deno.land/std@0.177.0/assert/mod.ts";
+import { isValidRideSession } from "../types/ride.ts";
+import { isValidGroupRide } from "../types/group-ride.ts";
 import {
   createMockRideSession,
-  createMockTelemetryPoint,
   createMockGroupRide,
-  createMockDevice,
-  assertValidRideSession,
 } from "../testing/test-utils.ts";
 
-Deno.test("RideSession - can create mock and validate", () => {
+Deno.test("isValidRideSession - returns true for valid session", () => {
   const session = createMockRideSession();
-  assertValidRideSession(session);
-  assertEquals(session.isPublic, false);
+  assertEquals(isValidRideSession(session), true);
 });
 
-Deno.test("RideTelemetryPoint - creates valid point", () => {
-  const point = createMockTelemetryPoint({ speedKmh: 32.5 });
-  assertExists(point.recordedAt);
-  assertEquals(point.speedKmh, 32.5);
+Deno.test("isValidRideSession - returns false when missing required fields", () => {
+  const session = createMockRideSession({ id: undefined as any });
+  assertEquals(isValidRideSession(session), false);
 });
 
-Deno.test("GroupRide - mock creation works", () => {
-  const group = createMockGroupRide({ name: "Asheville Night Ride" });
-  assertEquals(group.name, "Asheville Night Ride");
-  assertEquals(group.status, "active");
+Deno.test("isValidRideSession - returns false if endedAt is before startedAt", () => {
+  const session = createMockRideSession({
+    startedAt: "2026-06-04T10:00:00Z",
+    endedAt: "2026-06-04T09:00:00Z",
+  });
+  assertEquals(isValidRideSession(session), false);
 });
 
-Deno.test("PEVDevice - creates device with defaults", () => {
-  const device = createMockDevice();
-  assertEquals(device.deviceType, "FloatWheel");
-  assertEquals(device.model, "ADV Pro");
+Deno.test("isValidGroupRide - returns true for valid ride", () => {
+  const ride = createMockGroupRide();
+  assertEquals(isValidGroupRide(ride), true);
+});
+
+Deno.test("isValidGroupRide - returns false for invalid status", () => {
+  const ride = createMockGroupRide({ status: "invalid" as any });
+  assertEquals(isValidGroupRide(ride), false);
+});
+
+Deno.test("isValidGroupRide - returns false if endedAt before startedAt", () => {
+  const ride = createMockGroupRide({
+    startedAt: "2026-06-04T10:00:00Z",
+    endedAt: "2026-06-04T09:00:00Z",
+  });
+  assertEquals(isValidGroupRide(ride), false);
 });

@@ -24,3 +24,19 @@ export interface RideTelemetryPoint {
   powerWatts?: number;
   metadata?: Record<string, any>;
 }
+
+/**
+ * Basic validation for RideSession
+ */
+export function isValidRideSession(session: Partial<RideSession>): boolean {
+  if (!session.id || !session.riderId || !session.startedAt) {
+    return false;
+  }
+  if (typeof session.isPublic !== "boolean") {
+    return false;
+  }
+  if (session.endedAt && new Date(session.endedAt) < new Date(session.startedAt)) {
+    return false;
+  }
+  return true;
+}

@@ -17,3 +17,19 @@ export interface GroupRideParticipant {
     updatedAt: string;
   };
 }
+
+/**
+ * Basic validation for GroupRide
+ */
+export function isValidGroupRide(ride: Partial<GroupRide>): boolean {
+  if (!ride.id || !ride.name || !ride.creatorId || !ride.startedAt) {
+    return false;
+  }
+  if (ride.status && !['active', 'ended'].includes(ride.status)) {
+    return false;
+  }
+  if (ride.endedAt && new Date(ride.endedAt) < new Date(ride.startedAt)) {
+    return false;
+  }
+  return true;
+}
