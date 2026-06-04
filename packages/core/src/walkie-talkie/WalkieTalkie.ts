@@ -6,11 +6,11 @@ interface WalkieTalkieOptions {
   riderId: string;
   onRemoteAudio?: (stream: MediaStream, fromRiderId: string) => void;
   onError?: (error: Error) => void;
+  onConnectionStateChange?: (peerId: string, state: RTCPeerConnectionState) => void;
 }
 
 /**
- * Peer-to-peer Walkie-talkie using WebRTC + Supabase Realtime signaling
- * Optimized for low-latency GroupRide voice communication
+ * Peer-to-peer Walkie-talkie with ICE restart support for mobile/PEV use
  */
 export class WalkieTalkie {
   private supabase: SupabaseClient;
@@ -19,16 +19,14 @@ export class WalkieTalkie {
   private peers: Map<string, RTCPeerConnection> = new Map();
   private localStream: MediaStream | null = null;
   private channel: any;
+  private restartTimers: Map<string, number> = new Map();
 
-  // Optimized ICE servers for low latency
   private readonly iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    // Add your own TURN server here for production reliability
-    // { urls: 'turn:your-turn-server.com:3478', username: 'user', credential: 'pass' }
   ];
 
   constructor(private options: WalkieTalkieOptions) {
@@ -59,7 +57,7 @@ export class WalkieTalkie {
         }
       }
 
-      console.log('[WalkieTalkie] Started with optimized ICE');
+      console.log('[WalkieTalkie] Started');
     } catch (err) {
       this.options.onError?.(err as Error);
     }
@@ -68,18 +66,16 @@ export class WalkieTalkie {
   private async createPeerConnection(targetRiderId: string, isInitiator: boolean) {
     const pc = new RTCPeerConnection({
       iceServers: this.iceServers,
-      iceCandidatePoolSize: 10,           // Pre-gather candidates for faster connection
-      iceTransportPolicy: 'all',          // Allow all candidate types
-      bundlePolicy: 'max-bundle',         // Reduce ports used
-      rtcpMuxPolicy: 'require'            // Multiplex RTP/RTCP
+      iceCandidatePoolSize: 10,
+      iceTransportPolicy: 'all',
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require'
     });
 
     this.peers.set(targetRiderId, pc);
 
     if (this.localStream) {
-      this.localStream.getTracks().forEach(track => {
-        pc.addTrack(track, this.localStream!);
-      });
+      this.localStream.getTracks().forEach(track => pc.addTrack(track, this.localStream!));
     }
 
     pc.ontrack = (event) => {
@@ -88,30 +84,72 @@ export class WalkieTalkie {
       }
     };
 
-    // Trickle ICE - send candidates as soon as they are gathered
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         this.sendSignal(targetRiderId, 'ice-candidate', event.candidate);
       }
     };
 
-    // Prefer IPv4 and host candidates first when possible
-    pc.onicegatheringstatechange = () => {
-      if (pc.iceGatheringState === 'complete') {
-        console.log(`[WalkieTalkie] ICE gathering complete for ${targetRiderId}`);
+    // ICE connection state monitoring + auto-restart
+    pc.oniceconnectionstatechange = () => {
+      this.options.onConnectionStateChange?.(targetRiderId, pc.iceConnectionState);
+
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.warn(`[WalkieTalkie] Connection issue with ${targetRiderId} - attempting ICE restart`);
+        this.scheduleIceRestart(targetRiderId);
+      }
+
+      if (pc.iceConnectionState === 'connected') {
+        this.clearRestartTimer(targetRiderId);
       }
     };
 
     if (isInitiator) {
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        voiceActivityDetection: true
-      });
+      const offer = await pc.createOffer({ offerToReceiveAudio: true, voiceActivityDetection: true });
       await pc.setLocalDescription(offer);
       this.sendSignal(targetRiderId, 'offer', offer);
     }
 
     return pc;
+  }
+
+  private scheduleIceRestart(peerId: string) {
+    this.clearRestartTimer(peerId);
+
+    const timer = window.setTimeout(async () => {
+      const pc = this.peers.get(peerId);
+      if (pc && (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected')) {
+        await this.restartIce(peerId);
+      }
+    }, 2000); // Wait 2 seconds before restarting
+
+    this.restartTimers.set(peerId, timer);
+  }
+
+  private clearRestartTimer(peerId: string) {
+    const timer = this.restartTimers.get(peerId);
+    if (timer) {
+      clearTimeout(timer);
+      this.restartTimers.delete(peerId);
+    }
+  }
+
+  /**
+   * Perform ICE restart for a specific peer
+   */
+  private async restartIce(peerId: string) {
+    const pc = this.peers.get(peerId);
+    if (!pc) return;
+
+    try {
+      const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true });
+      await pc.setLocalDescription(offer);
+      this.sendSignal(peerId, 'offer', offer);
+      console.log(`[WalkieTalkie] ICE restart initiated for ${peerId}`);
+    } catch (err) {
+      console.error('ICE restart failed', err);
+      this.options.onError?.(err as Error);
+    }
   }
 
   private async handleSignal(payload: any) {
@@ -123,7 +161,9 @@ export class WalkieTalkie {
     }
 
     if (type === 'offer') {
+      const isRestart = signalData?.type === 'offer' && 'iceRestart' in (signalData.sdp || '');
       await pc.setRemoteDescription(new RTCSessionDescription(signalData));
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       this.sendSignal(from, 'answer', answer);
@@ -133,7 +173,7 @@ export class WalkieTalkie {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(signalData));
       } catch (e) {
-        console.warn('Failed to add ICE candidate', e);
+        // Ignore duplicate or invalid candidates during restart
       }
     }
   }
@@ -145,7 +185,6 @@ export class WalkieTalkie {
       payload: { from: this.riderId, to, type, data }
     });
 
-    // Backup via Edge Function
     this.supabase.functions.invoke('walkie-talkie', {
       body: {
         action: 'signal',
@@ -167,9 +206,14 @@ export class WalkieTalkie {
   }
 
   disconnect() {
+    this.restartTimers.forEach(timer => clearTimeout(timer));
+    this.restartTimers.clear();
+
     this.peers.forEach(pc => pc.close());
     this.peers.clear();
+
     if (this.channel) this.channel.unsubscribe();
+
     if (this.localStream) {
       this.localStream.getTracks().forEach(track => track.stop());
     }
