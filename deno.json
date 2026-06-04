@@ -5,6 +5,7 @@
     "strict": true
   },
   "imports": {
-    "@shared/": "./_shared/"
+    "@floatmaps/core/": "./packages/core/src/",
+    "@shared/": "./supabase/functions/_shared/"
   }
 }
