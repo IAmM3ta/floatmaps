@@ -1,16 +1,12 @@
 import { assert } from "https://deno.land/std@0.177.0/assert/mod.ts";
-// ^ Deno Standard Library - provides testing assertions
-
 import { fc, testProp } from "https://esm.sh/fast-check@3.18.0";
-// ^ fast-check via esm.sh - property-based testing library for generating test cases and shrinking
-
 import { isValidRideSession, isValidTelemetryPoint } from "../types/ride.ts";
-// ^ Local project import - validation functions defined in the core types
+import { isValidGroupRide } from "../types/group-ride.ts";
 
-// === Improved Property Tests with Better Shrinking ===
+// === RideSession Property Tests ===
 
 testProp(
-  "isValidRideSession accepts any well-formed generated session",
+  "isValidRideSession accepts well-formed generated sessions",
   [fc.record({
     id: fc.uuid(),
     riderId: fc.uuid(),
@@ -19,8 +15,11 @@ testProp(
     endedAt: fc.option(fc.date({ min: new Date("2020-01-01") }).map(d => d.toISOString())),
     isPublic: fc.boolean(),
     metadata: fc.object(),
-  }, { requiredKeys: ["id", "riderId", "startedAt", "isPublic"] })],
+  }, {
+    requiredKeys: ["id", "riderId", "startedAt", "isPublic"]
+  })],
   (session) => {
+    // Skip invalid date combinations during generation
     if (session.endedAt && new Date(session.endedAt) < new Date(session.startedAt)) {
       return;
     }
@@ -28,34 +27,55 @@ testProp(
   }
 );
 
-// Improved telemetry point test with tighter bounds for better shrinking
+// === TelemetryPoint Property Tests (Improved Shrinking) ===
+
 testProp(
-  "isValidTelemetryPoint correctly classifies coordinate validity",
+  "isValidTelemetryPoint correctly validates coordinate ranges",
   [fc.record({
     recordedAt: fc.date().map(d => d.toISOString()),
-    latitude: fc.double({ min: -90, max: 90, noDefaultInfinity: true, noNaN: true }),
-    longitude: fc.double({ min: -180, max: 180, noDefaultInfinity: true, noNaN: true }),
+    latitude: fc.double({ min: -90, max: 90, noNaN: true, noDefaultInfinity: true }),
+    longitude: fc.double({ min: -180, max: 180, noNaN: true, noDefaultInfinity: true }),
   })],
   (point) => {
     const result = isValidTelemetryPoint(point);
-    const inRange = point.latitude >= -90 && point.latitude <= 90 &&
-                    point.longitude >= -180 && point.longitude <= 180;
+    const inRange =
+      point.latitude >= -90 && point.latitude <= 90 &&
+      point.longitude >= -180 && point.longitude <= 180;
 
     assert(result === inRange);
   }
 );
 
+// === GroupRide Property Tests ===
+
+testProp(
+  "isValidGroupRide accepts valid generated rides",
+  [fc.record({
+    id: fc.uuid(),
+    name: fc.string({ minLength: 1, maxLength: 100 }),
+    creatorId: fc.uuid(),
+    status: fc.constantFrom("active", "ended"),
+    startedAt: fc.date({ min: new Date("2020-01-01") }).map(d => d.toISOString()),
+    endedAt: fc.option(fc.date({ min: new Date("2020-01-01") }).map(d => d.toISOString())),
+    metadata: fc.object(),
+  }, {
+    requiredKeys: ["id", "name", "creatorId", "status", "startedAt"]
+  })],
+  (ride) => {
+    if (ride.endedAt && new Date(ride.endedAt) < new Date(ride.startedAt)) {
+      return;
+    }
+    assert(isValidGroupRide(ride));
+  }
+);
+
 // === Shrinking Demonstration ===
-// This test is intentionally written to demonstrate how fast-check performs shrinking.
-// When a property fails, fast-check tries to find the *smallest* possible input
-// that still causes the failure. This process is called "shrinking".
-//
-// In the output below, `result.counterexample` contains the minimal failing input.
-// This makes debugging much easier because you see the simplest case that breaks your code.
-Deno.test("Shrinking demonstration: find minimal invalid latitude", async () => {
+// This test intentionally searches for invalid latitudes to demonstrate shrinking.
+// fast-check will try to find the smallest possible failing value.
+Deno.test("Shrinking demo: minimal invalid latitude", async () => {
   const result = await fc.check(
     fc.property(
-      fc.double({ min: 90.0001, max: 200 }),
+      fc.double({ min: 90.0001, max: 200, noNaN: true }),
       (badLatitude) => {
         const point = {
           recordedAt: new Date().toISOString(),
@@ -65,13 +85,10 @@ Deno.test("Shrinking demonstration: find minimal invalid latitude", async () => 
         return isValidTelemetryPoint(point) === false;
       }
     ),
-    { numRuns: 100 }
+    { numRuns: 200 }
   );
 
   if (result.failed) {
-    console.log("\n=== Shrinking Counterexample ===");
-    console.log("Smallest failing latitude found:", result.counterexample?.[0]);
-    console.log("\nThis value is the result of fast-check's shrinking algorithm.");
-    console.log("It started with larger invalid values and reduced them to the smallest possible failing input.");
+    console.log("\n[Shrinking] Smallest failing latitude:", result.counterexample?.[0]);
   }
 });
