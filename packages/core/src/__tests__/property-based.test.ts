@@ -2,6 +2,7 @@ import { assert } from "https://deno.land/std@0.177.0/assert/mod.ts";
 import { fc, testProp } from "https://esm.sh/fast-check@3.18.0";
 import { isValidRideSession, isValidTelemetryPoint } from "../types/ride.ts";
 import { isValidGroupRide } from "../types/group-ride.ts";
+import { isValidDevice } from "../types/device.ts";
 
 // === RideSession Property Tests ===
 
@@ -19,7 +20,6 @@ testProp(
     requiredKeys: ["id", "riderId", "startedAt", "isPublic"]
   })],
   (session) => {
-    // Skip invalid date combinations during generation
     if (session.endedAt && new Date(session.endedAt) < new Date(session.startedAt)) {
       return;
     }
@@ -27,7 +27,7 @@ testProp(
   }
 );
 
-// === TelemetryPoint Property Tests (Improved Shrinking) ===
+// === TelemetryPoint Property Tests ===
 
 testProp(
   "isValidTelemetryPoint correctly validates coordinate ranges",
@@ -69,9 +69,26 @@ testProp(
   }
 );
 
+// === PEVDevice Property Tests ===
+
+testProp(
+  "isValidDevice accepts valid generated devices",
+  [fc.record({
+    id: fc.uuid(),
+    riderId: fc.uuid(),
+    deviceType: fc.string({ minLength: 1, maxLength: 50 }),
+    model: fc.option(fc.string({ minLength: 1, maxLength: 50 })),
+    voltageConfig: fc.option(fc.string({ minLength: 1, maxLength: 20 })),
+    metadata: fc.object(),
+  }, {
+    requiredKeys: ["id", "riderId", "deviceType"]
+  })],
+  (device) => {
+    assert(isValidDevice(device));
+  }
+);
+
 // === Shrinking Demonstration ===
-// This test intentionally searches for invalid latitudes to demonstrate shrinking.
-// fast-check will try to find the smallest possible failing value.
 Deno.test("Shrinking demo: minimal invalid latitude", async () => {
   const result = await fc.check(
     fc.property(
