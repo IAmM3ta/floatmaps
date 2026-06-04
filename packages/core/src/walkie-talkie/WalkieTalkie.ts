@@ -10,7 +10,7 @@ interface WalkieTalkieOptions {
 }
 
 /**
- * Peer-to-peer Walkie-talkie with ICE restart support for mobile/PEV use
+ * Peer-to-peer Walkie-talkie with robust ICE + STUN fallback support
  */
 export class WalkieTalkie {
   private supabase: SupabaseClient;
@@ -21,12 +21,33 @@ export class WalkieTalkie {
   private channel: any;
   private restartTimers: Map<string, number> = new Map();
 
+  // Diverse STUN servers for better fallback and resilience
   private readonly iceServers = [
+    // Google STUN (primary)
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+
+    // Cloudflare STUN (good global coverage)
+    { urls: 'stun:stun.cloudflare.com:3478' },
+
+    // Twilio / other public STUN (additional fallbacks)
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    { urls: 'stun:stun.stunprotocol.org:3478' },
+
+    // Add your own TURN server(s) here for production
+    // {
+    //   urls: 'turn:your-turn.example.com:3478',
+    //   username: 'username',
+    //   credential: 'credential'
+    // },
+    // {
+    //   urls: 'turns:your-turn.example.com:5349',
+    //   username: 'username',
+    //   credential: 'credential'
+    // }
   ];
 
   constructor(private options: WalkieTalkieOptions) {
@@ -57,7 +78,7 @@ export class WalkieTalkie {
         }
       }
 
-      console.log('[WalkieTalkie] Started');
+      console.log('[WalkieTalkie] Started with STUN fallbacks');
     } catch (err) {
       this.options.onError?.(err as Error);
     }
@@ -90,12 +111,10 @@ export class WalkieTalkie {
       }
     };
 
-    // ICE connection state monitoring + auto-restart
     pc.oniceconnectionstatechange = () => {
       this.options.onConnectionStateChange?.(targetRiderId, pc.iceConnectionState);
 
       if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        console.warn(`[WalkieTalkie] Connection issue with ${targetRiderId} - attempting ICE restart`);
         this.scheduleIceRestart(targetRiderId);
       }
 
@@ -115,14 +134,12 @@ export class WalkieTalkie {
 
   private scheduleIceRestart(peerId: string) {
     this.clearRestartTimer(peerId);
-
-    const timer = window.setTimeout(async () => {
+    const timer = window.setTimeout(() => {
       const pc = this.peers.get(peerId);
       if (pc && (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected')) {
-        await this.restartIce(peerId);
+        this.restartIce(peerId);
       }
-    }, 2000); // Wait 2 seconds before restarting
-
+    }, 2000);
     this.restartTimers.set(peerId, timer);
   }
 
@@ -134,9 +151,6 @@ export class WalkieTalkie {
     }
   }
 
-  /**
-   * Perform ICE restart for a specific peer
-   */
   private async restartIce(peerId: string) {
     const pc = this.peers.get(peerId);
     if (!pc) return;
@@ -145,9 +159,7 @@ export class WalkieTalkie {
       const offer = await pc.createOffer({ iceRestart: true, offerToReceiveAudio: true });
       await pc.setLocalDescription(offer);
       this.sendSignal(peerId, 'offer', offer);
-      console.log(`[WalkieTalkie] ICE restart initiated for ${peerId}`);
     } catch (err) {
-      console.error('ICE restart failed', err);
       this.options.onError?.(err as Error);
     }
   }
@@ -161,9 +173,7 @@ export class WalkieTalkie {
     }
 
     if (type === 'offer') {
-      const isRestart = signalData?.type === 'offer' && 'iceRestart' in (signalData.sdp || '');
       await pc.setRemoteDescription(new RTCSessionDescription(signalData));
-
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       this.sendSignal(from, 'answer', answer);
@@ -172,9 +182,7 @@ export class WalkieTalkie {
     } else if (type === 'ice-candidate' && signalData) {
       try {
         await pc.addIceCandidate(new RTCIceCandidate(signalData));
-      } catch (e) {
-        // Ignore duplicate or invalid candidates during restart
-      }
+      } catch {}
     }
   }
 
@@ -208,14 +216,9 @@ export class WalkieTalkie {
   disconnect() {
     this.restartTimers.forEach(timer => clearTimeout(timer));
     this.restartTimers.clear();
-
     this.peers.forEach(pc => pc.close());
     this.peers.clear();
-
     if (this.channel) this.channel.unsubscribe();
-
-    if (this.localStream) {
-      this.localStream.getTracks().forEach(track => track.stop());
-    }
+    if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
   }
 }
