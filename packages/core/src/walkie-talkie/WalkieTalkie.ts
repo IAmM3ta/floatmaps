@@ -1,16 +1,23 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+interface TurnServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}
+
 interface WalkieTalkieOptions {
   supabase: SupabaseClient;
   groupRideId: string;
   riderId: string;
+  turnServers?: TurnServer[];           // Optional custom TURN servers
   onRemoteAudio?: (stream: MediaStream, fromRiderId: string) => void;
   onError?: (error: Error) => void;
   onConnectionStateChange?: (peerId: string, state: RTCPeerConnectionState) => void;
 }
 
 /**
- * Peer-to-peer Walkie-talkie with robust ICE + STUN fallback support
+ * Peer-to-peer Walkie-talkie with configurable TURN + robust ICE
  */
 export class WalkieTalkie {
   private supabase: SupabaseClient;
@@ -21,39 +28,29 @@ export class WalkieTalkie {
   private channel: any;
   private restartTimers: Map<string, number> = new Map();
 
-  // Diverse STUN servers for better fallback and resilience
-  private readonly iceServers = [
-    // Google STUN (primary)
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-
-    // Cloudflare STUN (good global coverage)
-    { urls: 'stun:stun.cloudflare.com:3478' },
-
-    // Twilio / other public STUN (additional fallbacks)
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'stun:stun.stunprotocol.org:3478' },
-
-    // Add your own TURN server(s) here for production
-    // {
-    //   urls: 'turn:your-turn.example.com:3478',
-    //   username: 'username',
-    //   credential: 'credential'
-    // },
-    // {
-    //   urls: 'turns:your-turn.example.com:5349',
-    //   username: 'username',
-    //   credential: 'credential'
-    // }
-  ];
+  private iceServers: RTCIceServer[];
 
   constructor(private options: WalkieTalkieOptions) {
     this.supabase = options.supabase;
     this.groupRideId = options.groupRideId;
     this.riderId = options.riderId;
+
+    // Build ICE servers list: STUN + optional TURN
+    this.iceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+      { urls: 'stun:stun.stunprotocol.org:3478' },
+    ];
+
+    // Add user-provided TURN servers (highest priority for reliability)
+    if (options.turnServers && options.turnServers.length > 0) {
+      this.iceServers.push(...options.turnServers);
+    }
   }
 
   async start() {
@@ -78,7 +75,7 @@ export class WalkieTalkie {
         }
       }
 
-      console.log('[WalkieTalkie] Started with STUN fallbacks');
+      console.log('[WalkieTalkie] Started');
     } catch (err) {
       this.options.onError?.(err as Error);
     }
@@ -219,6 +216,8 @@ export class WalkieTalkie {
     this.peers.forEach(pc => pc.close());
     this.peers.clear();
     if (this.channel) this.channel.unsubscribe();
-    if (this.localStream) this.localStream.getTracks().forEach(track => track.stop());
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => track.stop());
+    }
   }
 }
