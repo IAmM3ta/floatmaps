@@ -18,13 +18,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Check JavaScript syntax
         run: node --check webmcp.js
 
-      - name: Run advanced WebMCP schema validator
-        run: node scripts/validate-webmcp.js
+      - name: Run advanced WebMCP + JSON Schema validator
+        run: npm run validate:webmcp
 
       - name: Summary
         if: always()
-        run: echo "WebMCP validation completed. Check logs above for details."
+        run: echo "WebMCP validation completed."
