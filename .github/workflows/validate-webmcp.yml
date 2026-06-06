@@ -22,22 +22,9 @@ jobs:
       - name: Check JavaScript syntax
         run: node --check webmcp.js
 
-      - name: Validate WebMCP tool schemas
-        run: |
-          node -e '
-            const fs = require("fs");
-            const content = fs.readFileSync("webmcp.js", "utf8");
-            
-            // Basic validation: check that registerTool calls exist
-            if (!content.includes("registerTool")) {
-              console.error("No tools registered in webmcp.js");
-              process.exit(1);
-            }
-            
-            console.log("Basic WebMCP validation passed");
-          '
+      - name: Run advanced WebMCP schema validator
+        run: node scripts/validate-webmcp.js
 
-      - name: Lint (optional)
-        run: |
-          npm install -g eslint 2>/dev/null || true
-          npx eslint webmcp.js --no-eslintrc --env es6 --parser-options=ecmaVersion:2020 || echo "Linting completed (no strict config)"
+      - name: Summary
+        if: always()
+        run: echo "WebMCP validation completed. Check logs above for details."
