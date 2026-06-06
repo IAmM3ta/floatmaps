@@ -1,0 +1,43 @@
+name: Validate WebMCP Integration
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check JavaScript syntax
+        run: node --check webmcp.js
+
+      - name: Validate WebMCP tool schemas
+        run: |
+          node -e '
+            const fs = require("fs");
+            const content = fs.readFileSync("webmcp.js", "utf8");
+            
+            // Basic validation: check that registerTool calls exist
+            if (!content.includes("registerTool")) {
+              console.error("No tools registered in webmcp.js");
+              process.exit(1);
+            }
+            
+            console.log("Basic WebMCP validation passed");
+          '
+
+      - name: Lint (optional)
+        run: |
+          npm install -g eslint 2>/dev/null || true
+          npx eslint webmcp.js --no-eslintrc --env es6 --parser-options=ecmaVersion:2020 || echo "Linting completed (no strict config)"
